@@ -4,6 +4,7 @@ from tqdm import tqdm
 from .molecule import Molecule
 import torch
 
+
 def get_all_species(structures):
     all_species = []
     for structure in structures:
@@ -12,10 +13,11 @@ def get_all_species(structures):
     all_species = np.sort(np.unique(all_species))
     return all_species
 
+
 def get_forces(structures, FORCES_KEY):
     forces = []
     for structure in structures:
-        forces.append(torch.FloatTensor(structure.arrays[FORCES_KEY]))
+        forces.append(torch.tensor(structure.arrays[FORCES_KEY]))
     return forces
 
 
@@ -24,9 +26,18 @@ def update_pyg_graphs(pyg_graphs, key, values):
         pyg_graphs[index].update({key: values[index]})
 
 
-def get_pyg_graphs(structures, all_species, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES, USE_LONG_RANGE, K_CUT):
+def get_pyg_graphs(
+    structures,
+    all_species,
+    R_CUT,
+    USE_ADDITIONAL_SCALAR_ATTRIBUTES,
+    USE_LONG_RANGE,
+    K_CUT,
+):
     molecules = [
-        Molecule(structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES, USE_LONG_RANGE, K_CUT)
+        Molecule(
+            structure, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBUTES, USE_LONG_RANGE, K_CUT
+        )
         for structure in tqdm(structures)
     ]
 
@@ -38,9 +49,10 @@ def get_pyg_graphs(structures, all_species, R_CUT, USE_ADDITIONAL_SCALAR_ATTRIBU
         max_k_num = np.max(k_nums)
     else:
         max_k_num = None
-        
+
     pyg_graphs = [
-        molecule.get_graph(max_num, all_species, max_k_num) for molecule in tqdm(molecules)
+        molecule.get_graph(max_num, all_species, max_k_num)
+        for molecule in tqdm(molecules)
     ]
     return pyg_graphs
 
@@ -56,32 +68,33 @@ def get_compositional_features(structures, all_species):
 
 
 def get_targets(structures, GENERAL_TARGET_SETTINGS):
-    '''Get general targets from structures'''
+    """Get general targets from structures"""
 
     targets = []
-    if GENERAL_TARGET_SETTINGS.TARGET_TYPE not in ['structural', 'atomic']:
+    if GENERAL_TARGET_SETTINGS.TARGET_TYPE not in ["structural", "atomic"]:
         raise ValueError("unknown target type")
-    
+
     for structure in structures:
-        if GENERAL_TARGET_SETTINGS.TARGET_TYPE == 'structural':
+        if GENERAL_TARGET_SETTINGS.TARGET_TYPE == "structural":
             target_now = structure.info[GENERAL_TARGET_SETTINGS.TARGET_KEY]
             if not isinstance(target_now, np.ndarray):
                 raise ValueError("target must be numpy array")
             if len(target_now.shape) != 1:
                 raise ValueError("structural target must be 1D array")
-            
+
             target_now = target_now[np.newaxis]
-            
-        elif GENERAL_TARGET_SETTINGS.TARGET_TYPE == 'atomic':
+
+        elif GENERAL_TARGET_SETTINGS.TARGET_TYPE == "atomic":
             target_now = structure.arrays[GENERAL_TARGET_SETTINGS.TARGET_KEY]
             if not isinstance(target_now, np.ndarray):
                 raise ValueError("target must be numpy array")
             if len(target_now.shape) != 2:
                 raise ValueError("atomic target must be 2D array")
-            
-        targets.append(torch.FloatTensor(target_now))
+
+        targets.append(torch.tensor(target_now))
     return targets
-        
+
+
 def get_self_contributions(energy_key, train_structures, all_species):
     train_energies = np.array(
         [structure.info[energy_key] for structure in train_structures]
