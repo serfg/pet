@@ -10,7 +10,7 @@ from .utilities import string2dtype, get_quadrature_predictions
 
 class SingleStructCalculator:
     def __init__(
-        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None
+        self, path_to_calc_folder, checkpoint="best_val_rmse_both_model", device="cpu", quadrature_order=None, inversions=False,
     ):
         hypers_path = path_to_calc_folder + "/hypers_used.yaml"
         path_to_model_state_dict = (
@@ -56,6 +56,8 @@ class SingleStructCalculator:
         else:
             self.quadrature_order = None
 
+        self.inversions = inversions
+
     def forward(self, structure):
         molecule = MoleculeCPP(
             structure,
@@ -77,7 +79,7 @@ class SingleStructCalculator:
         )
         graph = graph.to(self.device)
         
-        if self.quadrature_order is None:
+        if self.quadrature_order is None and not self.inversions:
             prediction_energy, prediction_forces = self.model(
                 graph, augmentation=False, create_graph=False
             )
@@ -85,7 +87,7 @@ class SingleStructCalculator:
             prediction_forces_final = prediction_forces.data.cpu().numpy()
         else:
             prediction_energy_final, prediction_forces_final = get_quadrature_predictions(
-                graph, self.model, self.quadrature_order, string2dtype(self.architectural_hypers.DTYPE)
+                graph, self.model, self.quadrature_order, self.inversions, string2dtype(self.architectural_hypers.DTYPE)
             )
 
         compositional_features = get_compositional_features(
@@ -94,5 +96,8 @@ class SingleStructCalculator:
         self_contributions_energy = np.dot(
             compositional_features, self.self_contributions
         )
-        energy_total = prediction_energy_final + self_contributions_energy
+
+        # MC self_contributions_energy can be yuge and fuck up precision in well single precision
+        # taking it out for now, probably we should add an option
+        energy_total = prediction_energy_final # + self_contributions_energy
         return energy_total, prediction_forces_final

@@ -446,7 +446,7 @@ def get_quadrature(L):
             for v, weight in zip(all_v, weights_now):
                 weights.append(weight)
                 angles = [theta, v, w]
-                rotation = R.from_euler("xyz", angles, degrees=False)
+                rotation = R.from_euler("zxz", angles, degrees=False)
                 rotation_matrix = rotation.as_matrix()
                 matrices.append(rotation_matrix)
 
@@ -474,25 +474,41 @@ def string2dtype(string):
 
     raise ValueError("unknown dtype")
 
-def get_quadrature_predictions(batch, model, quadrature_order, dtype):
+def get_quadrature_predictions(batch, model, quadrature_order, inversions, dtype):
     x_initial = batch.x.clone()
-    all_energies, all_forces = [], []
-    rotations, weights = get_quadrature(quadrature_order)
-    for rotation in rotations:
-        rotation = torch.tensor(rotation, device = batch.x.device, dtype = dtype)
-        batch_rotations = rotation[None, :].repeat(batch.num_nodes, 1, 1)
-        batch.x = torch.bmm(x_initial, batch_rotations)
-        prediction_energy, prediction_forces = model(
-            batch, augmentation=False, create_graph=False
-        )
-        all_energies.append(prediction_energy.data.cpu().numpy())
-        all_forces.append(prediction_forces.data.cpu().numpy())
+
+    if quadrature_order is not None:
+        rotations, weights = get_quadrature(quadrature_order)
+    else:
+        assert inversions
+
+        rotations = [np.eye(3)]
+        weights = [1.0]
+
+    inverse_rotations = [r.T for r in rotations]
+
+    if inversions:
+        rotations += [-r for r in rotations]
+        inverse_rotations += [-r for r in inverse_rotations]
+        weights += weights
 
     energy_mean, forces_mean, total_weight = 0.0, 0.0, 0.0
-    for energy, forces, weight in zip(all_energies, all_forces, weights):
-        energy_mean += energy * weight
-        forces_mean += forces * weight
+    for rotation, inverse, weight in zip(rotations, inverse_rotations, weights):
+        rotation = torch.tensor(rotation, device = batch.x.device, dtype = dtype)
+        inverse = torch.tensor(inverse, device = batch.x.device, dtype = dtype)
+
+        batch_rotations = rotation[None, :].repeat(batch.num_nodes, 1, 1)
+        batch.x = torch.bmm(x_initial, batch_rotations)
+        energy, forces = model(
+            batch, augmentation=False, create_graph=False
+        )
+        # rotate forces back into original frame of reference
+        forces = torch.matmul(forces, inverse[None, :, :])
+
+        energy_mean += energy.data.cpu().numpy() * weight
+        forces_mean += forces.data.cpu().numpy() * weight
         total_weight += weight
+
     energy_mean /= total_weight
     forces_mean /= total_weight
     return energy_mean, forces_mean
