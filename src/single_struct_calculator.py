@@ -43,7 +43,7 @@ class SingleStructCalculator:
         model = PETMLIPWrapper(
             model, MLIP_SETTINGS.USE_ENERGIES, MLIP_SETTINGS.USE_FORCES
         )
-        if torch.cuda.is_available() and (torch.cuda.device_count() > 1):
+        if torch.cuda.is_available() and (torch.cuda.device_count() > 4):
             model = DataParallel(model)
             model = model.to(torch.device("cuda:0"))
 
@@ -85,7 +85,7 @@ class SingleStructCalculator:
         graph = graph.to(self.device)
 
         if self.quadrature_order is None:
-            if torch.cuda.is_available() and (torch.cuda.device_count() > 1):
+            if torch.cuda.is_available() and (torch.cuda.device_count() > 4):
                 self.model.module.augmentation = self.use_augmentation
                 self.model.module.create_graph = False
                 prediction_energy, prediction_forces = self.model([graph])
